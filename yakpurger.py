@@ -2,7 +2,27 @@ import argparse
 import m3u8
 import requests
 import os
+import sys
 from urllib.parse import urlsplit
+from ak.purge import Purge
+from colorama import Fore
+from urllib.parse import urlparse
+
+
+def report(context, message, level="info"):
+    if level == "debug":
+        if args.debug == True:
+            print(Fore.CYAN + context + ": ", end="")
+            print(Fore.YELLOW + "[DEBUG] " + message)
+    elif level == "warning":
+        print(Fore.CYAN + context + ": ", end="")
+        print(Fore.YELLOW + "[WARNING] " + message + Fore.WHITE)
+    elif level == "error":
+        print(Fore.CYAN + context + ": ", end="")
+        print(Fore.RED + "[ERROR] " + message + Fore.WHITE)
+    else:
+        print(Fore.CYAN + context + ": ", end="")
+        print(Fore.WHITE + message)
 
 
 def get_playlist(playlist_uri):
@@ -52,19 +72,25 @@ parser_group.add_argument(
     help="Text file providing list of Playlist URIs to parse",
 )
 parser.add_argument(
+    "--skipToBatch",
+    action="store",
+    dest="skip_to_batch",
+    help="When retrying after an error you can use this option to skip to the problematic batch and avoid retrying all the batches which ran successfully previously",
+    type=int,
+)
+parser.add_argument(
     "-d", "--debug", action="store_true", dest="debug", default="False", help="Add verbose debug logging"
 )
 parser.add_argument("-e", "--edgerc", action="store", dest="edgerc", help='EdgeRC file. Defaults to "~/.edgerc"')
 parser.add_argument("-s", "--section", action="store", dest="section", help='EdgeRC Section. Defaults to "default"')
-parser.add_argument(
-    "-a",
-    "--accountSwitchKey",
-    action="store",
-    dest="accountSwitchKey",
-    help="Account switch key. Only used by Akamai internal staff",
-)
 
 args = parser.parse_args()
+
+# Configure purge client
+purge_client = Purge(args.edgerc, args.section)
+
+# defaults
+PURGE_BATCH_SIZE = 200
 
 # Set array to collate segment urls
 all_segments = set()
@@ -79,15 +105,40 @@ else:
 
 # Iterate through files
 for playlist_uri in playlist_uris:
-    print(f"Parsing playlist: {playlist_uri}")
-    playlist = get_playlist(playlist_uri)
-    playlist_segments = parse_playlist(playlist)
-    print(f"Found {len(playlist_segments)} segments")
-    all_segments.update(playlist_segments)
+    if playlist_uri != "":
+        parsed_playlist = urlparse(playlist_uri)
+        playlist_file = parsed_playlist.path[parsed_playlist.path.rfind("/") + 1 :]
+        report(playlist_file, "Parsing playlist")
+        playlist = get_playlist(playlist_uri)
+        playlist_segments = parse_playlist(playlist)
+        report(playlist_file, f"Found {len(playlist_segments)} segments")
+        all_segments.update(playlist_segments)
 
 all_segments = sorted(all_segments)
-with open("output.txt", "w") as o:
-    o.write("\n".join(all_segments))
+report("Discovery", f"-- Found {len(all_segments)} segments to process")
 
-print(f"Segment count = {len(all_segments)}")
+total_batches = len(all_segments) // PURGE_BATCH_SIZE
+report("Discovery", f"-- Segments divided into {total_batches} batches")
+
+for batch in range(total_batches):
+    # Skip this iteration if skipToBatch provided
+    if args.skip_to_batch and args.skip_to_batch > batch:
+        continue
+
+    start_range = 0 + (batch * PURGE_BATCH_SIZE)
+    end_range = (start_range + PURGE_BATCH_SIZE) - 1
+    report(f"Batch {batch}", f"Purging batch {batch}. Range = {start_range}-{end_range}")
+
+    try:
+        purge_objects = all_segments[start_range:end_range]
+        purge_result = purge_client.invalidateByUrl(network="staging", objects=purge_objects)
+    except Exception as err:
+        report(
+            f"Batch {batch}",
+            f"An error occurred in purging. Please re-run the script with the '--skipToBatch {batch}'",
+            level="error",
+        )
+        report(f"Batch {batch}", str(err), level="error")
+        sys.exit(1)
+
 print("process complete")
