@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from ak.purge import Purge
 from colorama import Fore
 from urllib.parse import urlparse
+import time
 
 
 def report(context, message, level="info"):
@@ -86,11 +87,13 @@ parser.add_argument("-s", "--section", action="store", dest="section", help='Edg
 
 args = parser.parse_args()
 
+start = time.process_time()
+
 # Configure purge client
 purge_client = Purge(args.edgerc, args.section)
 
 # defaults
-PURGE_BATCH_SIZE = 200
+PURGE_BATCH_SIZE = 250
 
 # Set array to collate segment urls
 all_segments = set()
@@ -120,6 +123,10 @@ report("Discovery", f"-- Found {len(all_segments)} segments to process")
 total_batches = len(all_segments) // PURGE_BATCH_SIZE
 report("Discovery", f"-- Segments divided into {total_batches} batches")
 
+## Write all_segments to temp file
+with open("output.txt", "w") as o:
+    o.write("\n".join(all_segments))
+
 for batch in range(total_batches):
     # Skip this iteration if skipToBatch provided
     if args.skip_to_batch and args.skip_to_batch > batch:
@@ -131,7 +138,7 @@ for batch in range(total_batches):
 
     try:
         purge_objects = all_segments[start_range:end_range]
-        purge_result = purge_client.invalidateByUrl(network="staging", objects=purge_objects)
+        purge_result = purge_client.deleteByUrl(network="staging", objects=purge_objects)
     except Exception as err:
         report(
             f"Batch {batch}",
@@ -141,4 +148,5 @@ for batch in range(total_batches):
         report(f"Batch {batch}", str(err), level="error")
         sys.exit(1)
 
-print("process complete")
+runtime = time.process_time() - start
+report("Global", f"Process complete in {runtime}s")
