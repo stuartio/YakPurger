@@ -33,28 +33,57 @@ def get_playlist(playlist_uri):
     urlpath = urlsplit(playlist_uri).path
     filename = os.path.basename(urlpath)
     playlist.base_uri = playlist_uri.replace(filename, "")
+    playlist.uri = playlist_uri
+    # with open(filename, "w") as f:
+    #     f.write(str(playlist, encoding="utf8"))
     return playlist
 
 
-def parse_playlist(playlist):
-    segments = set()
+def parse_playlist(playlist, exclude_segments):
+    segment_extensions = ["mp4", "ts", "mp4a", "mp4v"]
+    purge_urls = set()
+    purge_urls.add(playlist.uri)
+
     if hasattr(playlist, "segments"):
-        for segment in playlist.segments:
-            segment_uri = playlist.base_uri + segment.uri
-            segments.add(segment_uri)
+        for file in playlist.segments:
+            file_uri = playlist.base_uri + file.uri
+
+            # Exclude segments
+            exclude_segment = False
+            if exclude_segments:
+                for extension in segment_extensions:
+                    if file.uri.endswith(extension):
+                        exclude_segment = True
+            if not exclude_segment:
+                purge_urls.add(file_uri)
 
     if hasattr(playlist, "playlists"):
         # Use set to dedupe playlist list
         child_playlist_uris = set()
         for child_playlist_path in playlist.playlists:
-            child_playlist_uris.add(playlist.base_uri + child_playlist_path.uri)
+            child_playlist_uri = playlist.base_uri + child_playlist_path.uri
+            child_playlist_uris.add(child_playlist_uri)
+            purge_urls.add(child_playlist_uri)
 
         for child_playlist_uri in child_playlist_uris:
             child_playlist = get_playlist(child_playlist_uri)
-            child_segments = parse_playlist(child_playlist)
-            segments.update(child_segments)
+            child_segments = parse_playlist(child_playlist, exclude_segments)
+            purge_urls.update(child_segments)
 
-    return segments
+    if hasattr(playlist, "media"):
+        # Use set to dedupe playlist list
+        media_playlist_uris = set()
+        for media_playlist_path in playlist.media:
+            media_playlist_uri = playlist.base_uri + media_playlist_path.uri
+            media_playlist_uris.add(media_playlist_uri)
+            purge_urls.add(media_playlist_uri)
+
+        for media_playlist_uri in media_playlist_uris:
+            media_playlist = get_playlist(media_playlist_uri)
+            media_segments = parse_playlist(media_playlist, exclude_segments)
+            purge_urls.update(media_segments)
+
+    return purge_urls
 
 
 # Set options
@@ -80,6 +109,39 @@ parser.add_argument(
     type=int,
 )
 parser.add_argument(
+    "-b",
+    "--batchSize",
+    action="store",
+    dest="batch_size",
+    default=250,
+    help="Number of URLs to purge in a single request. Defaults to 250, but this may need to be lower for longer URLs.",
+    type=int,
+)
+parser.add_argument(
+    "-n",
+    "--network",
+    action="store",
+    dest="network",
+    default="production",
+    help="Network to purge assets from. Only 'production' or 'staging' are accepted. Defaults to 'production'.",
+    choices=["production", "staging"],
+)
+parser.add_argument(
+    "-p",
+    "--purgeMethod",
+    action="store",
+    dest="purge",
+    default="delete",
+    help="Type of purging to perform. Only 'invalidate' or 'delete' are accepted. Defaults to 'delete'.",
+    choices=["invalidate", "delete"],
+)
+parser.add_argument(
+    "--excludeSegments",
+    action="store_true",
+    dest="exclude_segments",
+    help="Do not purge segment files. All other referenced files will be purged.",
+)
+parser.add_argument(
     "-d", "--debug", action="store_true", dest="debug", default="False", help="Add verbose debug logging"
 )
 parser.add_argument("-e", "--edgerc", action="store", dest="edgerc", help='EdgeRC file. Defaults to "~/.edgerc"')
@@ -87,16 +149,16 @@ parser.add_argument("-s", "--section", action="store", dest="section", help='Edg
 
 args = parser.parse_args()
 
-start = time.process_time()
+start = time.time()
 
 # Configure purge client
 purge_client = Purge(args.edgerc, args.section)
 
 # defaults
-PURGE_BATCH_SIZE = 250
+PURGE_BATCH_SIZE = args.batch_size
 
 # Set array to collate segment urls
-all_segments = set()
+all_files = set()
 
 # Collate file list
 if args.url is not None:
@@ -113,19 +175,24 @@ for playlist_uri in playlist_uris:
         playlist_file = parsed_playlist.path[parsed_playlist.path.rfind("/") + 1 :]
         report(playlist_file, "Parsing playlist")
         playlist = get_playlist(playlist_uri)
-        playlist_segments = parse_playlist(playlist)
+        playlist_segments = parse_playlist(playlist, args.exclude_segments)
         report(playlist_file, f"Found {len(playlist_segments)} segments")
-        all_segments.update(playlist_segments)
+        all_files.update(playlist_segments)
 
-all_segments = sorted(all_segments)
-report("Discovery", f"-- Found {len(all_segments)} segments to process")
+all_files = sorted(all_files)
+with open("purge.txt", "w") as f:
+    f.write("\n".join(all_files))
+report("Discovery", f"-- Found {len(all_files)} files to purge")
 
-total_batches = len(all_segments) // PURGE_BATCH_SIZE
+total_batches = len(all_files) // PURGE_BATCH_SIZE
+# Handle fewer urls than PURGE_BATCH_SIZE
+if total_batches == 0:
+    total_batches = 1
 report("Discovery", f"-- Segments divided into {total_batches} batches")
 
-## Write all_segments to temp file
+## Write all_files to temp file
 with open("output.txt", "w") as o:
-    o.write("\n".join(all_segments))
+    o.write("\n".join(all_files))
 
 for batch in range(total_batches):
     # Skip this iteration if skipToBatch provided
@@ -137,8 +204,8 @@ for batch in range(total_batches):
     report(f"Batch {batch}", f"Purging batch {batch}. Range = {start_range}-{end_range}")
 
     try:
-        purge_objects = all_segments[start_range:end_range]
-        purge_result = purge_client.deleteByUrl(network="staging", objects=purge_objects)
+        purge_objects = all_files[start_range:end_range]
+        purge_result = purge_client.deleteByUrl(network="production", objects=purge_objects)
     except Exception as err:
         report(
             f"Batch {batch}",
@@ -148,5 +215,5 @@ for batch in range(total_batches):
         report(f"Batch {batch}", str(err), level="error")
         sys.exit(1)
 
-runtime = time.process_time() - start
+runtime = time.time() - start
 report("Global", f"Process complete in {runtime}s")
