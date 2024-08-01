@@ -10,6 +10,10 @@ You can install all required pips by running the following:
 python -m pip install -r requirements.txt
 ```
 
+## Credentials
+
+As the purge API does not support account switching, you will need credentials in the form of a .edgerc file from the account you wish to purge. Alternatively you can use environment variables in the form `AKAMAI_HOST`, `AKAMAI_CLIENT_TOKEN` etc., or if you combine with a `--section` parameter you can use `AKAMAI_<SECTION>_HOST`, `AKAMAI_<SECTION>_CLIENT_TOKEN`, and so on.
+
 ## Usage
 
 ```shell
