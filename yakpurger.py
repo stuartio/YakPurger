@@ -181,7 +181,7 @@ for playlist_uri in playlist_uris:
         if args.prefix:
             playlist_uri = args.prefix + playlist_uri
 
-        report(f"Parsing playlist uri: '{playlist_uri}'", level="debug")
+        report(f"Parsing", "Parsing playlist uri: '{playlist_uri}'", level="debug")
 
         parsed_playlist = urlparse(playlist_uri)
         playlist_file = parsed_playlist.path[parsed_playlist.path.rfind("/") + 1 :]
