@@ -192,8 +192,6 @@ for playlist_uri in playlist_uris:
         all_files.update(playlist_files)
 
 all_files = sorted(all_files)
-with open("purge.txt", "w") as f:
-    f.write("\n".join(all_files))
 report("Discovery", f"-- Found {len(all_files)} files to purge")
 
 total_batches = (len(all_files) // PURGE_BATCH_SIZE) + 1
