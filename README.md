@@ -32,8 +32,10 @@ options:
   -n {production,staging}, --network {production,staging}
                         Network to purge assets from. Only 'production' or 'staging' are accepted. Defaults to 'production'.
   -m {invalidate,delete}, --purgeMethod {invalidate,delete}
-                        Type of purging to perform. Only 'invalidate' or 'delete' are accepted. Defaults to 'delete'.
+                        Method of purging to perform. Only 'invalidate' or 'delete' are accepted. Defaults to 'delete'.
   --excludeSegments     Do not purge segment files. All other referenced files will be purged.
+  -p PREFIX, --prefix PREFIX
+                        Prefix to be added to all manifest URLs, e.g. --prefix 'https://streaming.com/token' .
   -d, --debug           Add verbose debug logging
   -e EDGERC, --edgerc EDGERC
                         EdgeRC file. Defaults to "~/.edgerc"
@@ -79,4 +81,16 @@ python yakpurger.py -f mymanifests.txt --edgerc yakpurger.edgerc --skipToBatch 5
 
 ```shell
 python yakpurger.py -f mymanifests.txt --edgerc yakpurger.edgerc --batchSize 100
+```
+
+7. Purge all files referenced by URL
+
+```shell
+python yakpurger.py -u https://stream.com/master.m3u8 --edgerc yakpurger.edgerc
+```
+
+8. Purge all files referenced by file, prepend the same URL to all
+
+```shell
+python yakpurger.py -f manifest_paths.txt --prefix https://stream.com/manifests --edgerc yakpurger.edgerc
 ```

@@ -142,6 +142,13 @@ parser.add_argument(
     help="Do not purge segment files. All other referenced files will be purged.",
 )
 parser.add_argument(
+    "-p",
+    "--prefix",
+    action="store",
+    dest="prefix",
+    help="Prefix to be added to all manifest URLs, e.g. --prefix 'https://streaming.com/token' .",
+)
+parser.add_argument(
     "-d", "--debug", action="store_true", dest="debug", default="False", help="Add verbose debug logging"
 )
 parser.add_argument("-e", "--edgerc", action="store", dest="edgerc", help='EdgeRC file. Defaults to "~/.edgerc"')
@@ -171,23 +178,25 @@ else:
 # Iterate through files
 for playlist_uri in playlist_uris:
     if playlist_uri != "":
+        if args.prefix:
+            playlist_uri = args.prefix + playlist_uri
+
+        report(f"Parsing playlist uri: '{playlist_uri}'", level="debug")
+
         parsed_playlist = urlparse(playlist_uri)
         playlist_file = parsed_playlist.path[parsed_playlist.path.rfind("/") + 1 :]
         report(playlist_file, "Parsing playlist")
         playlist = get_playlist(playlist_uri)
-        playlist_segments = parse_playlist(playlist, args.exclude_segments)
-        report(playlist_file, f"Found {len(playlist_segments)} segments")
-        all_files.update(playlist_segments)
+        playlist_files = parse_playlist(playlist, args.exclude_segments)
+        report(playlist_file, f"Found {len(playlist_files)} files")
+        all_files.update(playlist_files)
 
 all_files = sorted(all_files)
 with open("purge.txt", "w") as f:
     f.write("\n".join(all_files))
 report("Discovery", f"-- Found {len(all_files)} files to purge")
 
-total_batches = len(all_files) // PURGE_BATCH_SIZE
-# Handle fewer urls than PURGE_BATCH_SIZE
-if total_batches == 0:
-    total_batches = 1
+total_batches = (len(all_files) // PURGE_BATCH_SIZE) + 1
 report("Discovery", f"-- Segments divided into {total_batches} batches")
 
 ## Write all_files to temp file
@@ -201,6 +210,8 @@ for batch in range(total_batches):
 
     start_range = 0 + (batch * PURGE_BATCH_SIZE)
     end_range = (start_range + PURGE_BATCH_SIZE) - 1
+    if end_range > len(all_files):
+        end_range = len(all_files)
     report(f"Batch {batch}", f"Purging batch {batch}. Range = {start_range}-{end_range}, method = {args.method}")
 
     try:
