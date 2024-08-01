@@ -127,12 +127,12 @@ parser.add_argument(
     choices=["production", "staging"],
 )
 parser.add_argument(
-    "-p",
+    "-m",
     "--purgeMethod",
     action="store",
-    dest="purge",
+    dest="method",
     default="delete",
-    help="Type of purging to perform. Only 'invalidate' or 'delete' are accepted. Defaults to 'delete'.",
+    help="Method of purging to perform. Only 'invalidate' or 'delete' are accepted. Defaults to 'delete'.",
     choices=["invalidate", "delete"],
 )
 parser.add_argument(
@@ -201,11 +201,14 @@ for batch in range(total_batches):
 
     start_range = 0 + (batch * PURGE_BATCH_SIZE)
     end_range = (start_range + PURGE_BATCH_SIZE) - 1
-    report(f"Batch {batch}", f"Purging batch {batch}. Range = {start_range}-{end_range}")
+    report(f"Batch {batch}", f"Purging batch {batch}. Range = {start_range}-{end_range}, method = {args.method}")
 
     try:
         purge_objects = all_files[start_range:end_range]
-        purge_result = purge_client.deleteByUrl(network="production", objects=purge_objects)
+        if args.method == "delete":
+            purge_result = purge_client.deleteByUrl(network=args.network, objects=purge_objects)
+        else:
+            purge_result = purge_client.invalidateByUrl(network=args.network, objects=purge_objects)
     except Exception as err:
         report(
             f"Batch {batch}",

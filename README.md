@@ -27,7 +27,7 @@ options:
                         Number of URLs to purge in a single request. Defaults to 250, but this may need to be lower for longer URLs.
   -n {production,staging}, --network {production,staging}
                         Network to purge assets from. Only 'production' or 'staging' are accepted. Defaults to 'production'.
-  -p {invalidate,delete}, --purgeMethod {invalidate,delete}
+  -m {invalidate,delete}, --purgeMethod {invalidate,delete}
                         Type of purging to perform. Only 'invalidate' or 'delete' are accepted. Defaults to 'delete'.
   --excludeSegments     Do not purge segment files. All other referenced files will be purged.
   -d, --debug           Add verbose debug logging
