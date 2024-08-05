@@ -27,8 +27,16 @@ def report(context, message, level="info"):
 
 
 def get_playlist(playlist_uri):
-    response = requests.get(playlist_uri)
-    response.raise_for_status()
+    try:
+        response = requests.get(playlist_uri)
+        response.raise_for_status()
+    except:
+        report(playlist_uri, "Initial request failed. Retrying...")
+        try:
+            response = requests.get(playlist_uri)
+            response.raise_for_status()
+        except Exception:
+            raise f"{playlist_uri}: Failed to retrieve twice. The purge collection for this asset will likely be incomplete"
     playlist = m3u8.loads(response.text)
     urlpath = urlsplit(playlist_uri).path
     filename = os.path.basename(urlpath)
@@ -186,7 +194,12 @@ for playlist_uri in playlist_uris:
         parsed_playlist = urlparse(playlist_uri)
         playlist_file = parsed_playlist.path[parsed_playlist.path.rfind("/") + 1 :]
         report(playlist_file, "Parsing playlist")
-        playlist = get_playlist(playlist_uri)
+        try:
+            playlist = get_playlist(playlist_uri)
+        except Exception as err:
+            report(playlist_file, "An error has occurred. Skipping to next manifest", level="error")
+            report(playlist_file, err, level="error")
+            continue
         playlist_files = parse_playlist(playlist, args.exclude_segments)
         report(playlist_file, f"Found {len(playlist_files)} files")
         all_files.update(playlist_files)
