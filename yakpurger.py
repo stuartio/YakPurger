@@ -38,9 +38,16 @@ def get_playlist(playlist_uri):
         except Exception:
             raise f"{playlist_uri}: Failed to retrieve twice. The purge collection for this asset will likely be incomplete"
     playlist = m3u8.loads(response.text)
-    urlpath = urlsplit(playlist_uri).path
+    parsed_url = urlparse(playlist_uri)
+    urlpath = parsed_url.path
     filename = os.path.basename(urlpath)
-    playlist.base_uri = playlist_uri.replace(filename, "")
+
+    # Extract URL without query
+    url_without_query = playlist_uri
+    if parsed_url.query != "":
+        url_without_query = url_without_query.replace(f"?{parsed_url.query}", "")
+
+    playlist.base_uri = url_without_query.replace(filename, "")
     playlist.uri = playlist_uri
     # with open(filename, "w") as f:
     #     f.write(str(playlist, encoding="utf8"))
@@ -156,13 +163,13 @@ parser.add_argument(
     dest="prefix",
     help="Prefix to be added to all manifest URLs, e.g. --prefix 'https://streaming.com/token' .",
 )
-parser.add_argument(
-    "-d", "--debug", action="store_true", dest="debug", default="False", help="Add verbose debug logging"
-)
+parser.add_argument("-d", "--debug", action="store_true", dest="debug", default=False, help="Add verbose debug logging")
 parser.add_argument("-e", "--edgerc", action="store", dest="edgerc", help='EdgeRC file. Defaults to "~/.edgerc"')
 parser.add_argument("-s", "--section", action="store", dest="section", help='EdgeRC Section. Defaults to "default"')
 
+global args
 args = parser.parse_args()
+# report("Global", args.Namespace, level="debug")
 
 start = time.time()
 
@@ -189,7 +196,7 @@ for playlist_uri in playlist_uris:
         if args.prefix:
             playlist_uri = args.prefix + playlist_uri
 
-        report(f"Parsing", "Parsing playlist uri: '{playlist_uri}'", level="debug")
+        report("Parsing", f"Parsing playlist uri: '{playlist_uri}'", level="debug")
 
         parsed_playlist = urlparse(playlist_uri)
         playlist_file = parsed_playlist.path[parsed_playlist.path.rfind("/") + 1 :]
