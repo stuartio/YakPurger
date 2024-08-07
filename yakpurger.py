@@ -8,6 +8,8 @@ from ak.purge import Purge
 from colorama import Fore
 from urllib.parse import urlparse
 import time
+import datetime
+import json
 
 
 def report(context, message, level="info"):
@@ -24,6 +26,11 @@ def report(context, message, level="info"):
     else:
         print(Fore.CYAN + context + ": ", end="")
         print(Fore.WHITE + message)
+
+    if args.log_file:
+        log_entry = str(datetime.datetime.now()) + " -- " + context + " -- " + message + "\n"
+        with open(args.log_file, "a", encoding="utf8") as log_fp:
+            log_fp.write(log_entry)
 
 
 def get_playlist(playlist_uri):
@@ -49,8 +56,6 @@ def get_playlist(playlist_uri):
 
     playlist.base_uri = url_without_query.replace(filename, "")
     playlist.uri = playlist_uri
-    # with open(filename, "w") as f:
-    #     f.write(str(playlist, encoding="utf8"))
     return playlist
 
 
@@ -163,13 +168,20 @@ parser.add_argument(
     dest="prefix",
     help="Prefix to be added to all manifest URLs, e.g. --prefix 'https://streaming.com/token' .",
 )
+parser.add_argument(
+    "-l",
+    "--logFile",
+    action="store",
+    dest="log_file",
+    help="Log output to file.",
+)
 parser.add_argument("-d", "--debug", action="store_true", dest="debug", default=False, help="Add verbose debug logging")
 parser.add_argument("-e", "--edgerc", action="store", dest="edgerc", help='EdgeRC file. Defaults to "~/.edgerc"')
 parser.add_argument("-s", "--section", action="store", dest="section", help='EdgeRC Section. Defaults to "default"')
 
 global args
 args = parser.parse_args()
-# report("Global", args.Namespace, level="debug")
+report("Global", "ARGS: " + str(vars(args)), level="debug")
 
 start = time.time()
 
@@ -235,9 +247,19 @@ for batch in range(total_batches):
     try:
         purge_objects = all_files[start_range:end_range]
         if args.method == "delete":
-            purge_result = purge_client.deleteByUrl(network=args.network, objects=purge_objects)
+            # purge_result = purge_client.deleteByUrl(network=args.network, objects=purge_objects)
+            pass
         else:
-            purge_result = purge_client.invalidateByUrl(network=args.network, objects=purge_objects)
+            # purge_result = purge_client.invalidateByUrl(network=args.network, objects=purge_objects)
+            pass
+        if args.log_file:
+            log_time = str(datetime.datetime.now())
+            log_message = log_time + " -- " + f"Purging {PURGE_BATCH_SIZE} urls with method {args.method}\n"
+            with open(args.log_file, "a", encoding="utf8") as log_fp:
+                log_fp.write(log_message)
+                for purge_object in purge_objects:
+                    log_fp.write(f"{log_time} -- {purge_object}\n")
+
     except Exception as err:
         report(
             f"Batch {batch}",

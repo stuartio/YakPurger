@@ -36,6 +36,8 @@ options:
   --excludeSegments     Do not purge segment files. All other referenced files will be purged.
   -p PREFIX, --prefix PREFIX
                         Prefix to be added to all manifest URLs, e.g. --prefix 'https://streaming.com/token' .
+  -l LOG_FILE, --logFile LOG_FILE
+                        Log output to file.
   -d, --debug           Add verbose debug logging
   -e EDGERC, --edgerc EDGERC
                         EdgeRC file. Defaults to "~/.edgerc"
@@ -93,4 +95,10 @@ python yakpurger.py -u https://stream.com/master.m3u8 --edgerc yakpurger.edgerc
 
 ```shell
 python yakpurger.py -f manifest_paths.txt --prefix https://stream.com/manifests --edgerc yakpurger.edgerc
+```
+
+9. Purge all files referenced in mymanifests.txt, log to purge.log
+
+```shell
+python yakpurger.py -f mymanifests.txt --edgerc yakpurger.edgerc --logFile purge.log
 ```
