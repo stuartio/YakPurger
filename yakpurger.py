@@ -247,11 +247,9 @@ for batch in range(total_batches):
     try:
         purge_objects = all_files[start_range:end_range]
         if args.method == "delete":
-            # purge_result = purge_client.deleteByUrl(network=args.network, objects=purge_objects)
-            pass
+            purge_result = purge_client.deleteByUrl(network=args.network, objects=purge_objects)
         else:
-            # purge_result = purge_client.invalidateByUrl(network=args.network, objects=purge_objects)
-            pass
+            purge_result = purge_client.invalidateByUrl(network=args.network, objects=purge_objects)
         if args.log_file:
             log_time = str(datetime.datetime.now())
             log_message = log_time + " -- " + f"Purging {PURGE_BATCH_SIZE} urls with method {args.method}\n"
